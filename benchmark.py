@@ -4,6 +4,7 @@ import os
 import statistics
 import time
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 openssl_path = "/opt/openssl-3.3.2/bin/openssl"
 provider_path = "/opt/openssl-3.3.2/lib64/ossl-modules"
@@ -15,13 +16,22 @@ debug = {
 }
 
 
-def cleanup_files(files: list = None):
-    for file in files:
-        if os.path.exists(file):
-            os.remove(f"{tmp}/{file}")
+def cleanup_files(files: list | str):
+    if files == "*":
+        if os.path.exists(tmp) and (os.listdir(tmp) != []):
+            print(" > Residual files found in 'tmp'. Cleaning up...")
+            for file in os.listdir(tmp):
+                os.remove(f"{tmp}/{file}")
+
+    elif type(files) == list:
+        for file in files:
+            if os.path.exists(file):
+                os.remove(f"{tmp}/{file}")
+    else:
+        print("Error: cleanup_files() called with unsupported argument.")
 
 
-def generate_key(algorithm: str):
+def generate_key(algorithm: str) -> bool:
     try:
         print(" > Generating the keys...") if debug["keygen"] else None
 
@@ -128,7 +138,7 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
         verify_times.append(time.time() - start)
         print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
 
-        cleanup_files(["private_key.pem", "public_key.pem", "test_message.txt", "signature.bin"])
+        cleanup_files(["private_key.pem", "public_key.pem", "signature.bin"])
 
     return {
         'key_generation_avg': statistics.mean(key_times),
@@ -140,13 +150,11 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
 def run_benchmark(algorithms, test):
     results = {}
 
-    if os.path.exists(tmp) and (os.listdir(tmp) != []):
-        print(" > Residual files found in 'tmp'. Cleaning up...")
-        for file in os.listdir(tmp):
-            os.remove(f"{tmp}/{file}")
+    # Reset the environment
+    cleanup_files("*")
+    print("   Environment reset.\n")
 
-        print("   Environment reset.\n")
-
+    # Run the benchmark
     for algo in algorithms:
         print(f"Algoritmo: {algo.upper()}")
 
@@ -168,4 +176,40 @@ def save_results(results):
     with open('benchmark_results.json', 'w') as f:
         json.dump(results, f, indent=4)
 
-    print("Risultati salvati in 'benchmark_results.json'")
+    print("All results saved in 'benchmark_results.json'")
+
+
+def plot_benchmark(data, algorithms, colors, title, figsize, test_type):
+    times = {
+        "key_generation": [data[algo]["key_generation_avg"] for algo in reversed(algorithms)],
+        "operation": [data[algo]["encapsulation_avg" if test_type == "kem" else "signing_avg"]
+                      for algo in reversed(algorithms)],
+        "verification": [data[algo]["decapsulation_avg" if test_type == "kem" else "verification_avg"]
+                         for algo in reversed(algorithms)]
+    }
+
+    operations = ["Key Generation Time",
+                  "Encapsulation Time" if test_type == "kem" else "Signing Time",
+                  "Decapsulation Time" if test_type == "kem" else "Verification Time"]
+
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize, sharex=True)
+    fig.suptitle(title, fontsize=18, y=0.995)
+
+    for ax, operation, data in zip([ax1, ax2, ax3], operations, times.values()):
+        bars = ax.barh(list(reversed(algorithms)), data, color=list(reversed(colors)))
+        ax.set_title(operation)
+        ax.set_xlabel("Time (seconds)")
+
+        for rect in bars:
+            width = rect.get_width()
+            ax.text(
+                width + width * 0.02,
+                rect.get_y() + rect.get_height() / 2,
+                f"{width:.6f}s",
+                va="center",
+                ha="left",
+                fontsize=11
+            )
+
+    plt.tight_layout(h_pad=3)
+    plt.show()
