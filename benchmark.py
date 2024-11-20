@@ -3,86 +3,83 @@ import json
 import os
 import statistics
 import time
+from tqdm import tqdm
 
 openssl_path = "/opt/openssl-3.3.2/bin/openssl"
 provider_path = "/opt/openssl-3.3.2/lib64/ossl-modules"
-project_path = "./benchmark"
+tmp = "./tmp"
+
+debug = {
+    "keygen": False,
+}
 
 
 def cleanup_files(files: list = None):
     for file in files:
         if os.path.exists(file):
-            os.remove(f"{project_path}/{file}")
+            os.remove(f"{tmp}/{file}")
 
 
 def generate_key(algorithm: str):
     try:
-        print(" > Generazione chiave...")
-        keygen_cmd = [
+        print(" > Generating the keys...") if debug["keygen"] else None
+
+        subprocess.run([
             openssl_path, 'genpkey',
             '-provider', 'default',
             '-provider', 'oqsprovider',
             '-provider-path', provider_path,
-            '-out', f'{project_path}/key.pem',
+            '-out', f'{tmp}/private_key.pem',
             '-algorithm', algorithm
-        ]
+        ], capture_output=True, text=True, check=True)
 
-        subprocess.run(keygen_cmd, capture_output=True, text=True, check=True)
+        print("   Private key generated.") if debug["keygen"] else None
 
         subprocess.run([
             openssl_path, 'pkey',
-            '-in', f'{project_path}/key.pem',
+            '-in', f'{tmp}/private_key.pem',
             '-pubout',
-            '-out', f'{project_path}/public_key.pem',
+            '-out', f'{tmp}/public_key.pem',
             '-provider', 'oqsprovider',
             '-provider', 'default',
             '-provider-path', provider_path
         ], check=True)
 
-        print("   Chiave generata con successo.")
+        print("   Public key generated.") if debug["keygen"] else None
         return True
     except subprocess.CalledProcessError as e:
-        print(f"Errore nella generazione chiave per {algorithm}: ")
-        print(f"Comando: {' '.join(e.cmd)}")
+        print(f"Error in key generation for {algorithm.upper()}: ")
+        print(f"Command: {' '.join(e.cmd)}")
         print(f"Stdout: {e.stdout}")
         print(f"Stderr: {e.stderr}")
         return False
 
 
 def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
-    print(" > Avvio benchmark KEM...")
+    print(" > Starting KEM benchmark...")
     key_times = []
     encap_times = []
     decap_times = []
 
-    for i in range(num_iterations):
-        print(f"    - {i + 1}/{num_iterations} per KEM benchmark") if i % 20 == 0 or (i + 1) == num_iterations else None
-
-        # Generazione chiavi
+    for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
+        # Key generation
         start = time.time()
-        keygen_cmd = f"{openssl_path} genpkey -algorithm {algorithm}"
-        subprocess.run(keygen_cmd, shell=True, capture_output=True)
+        generate_key(algorithm)
         key_times.append(time.time() - start)
 
-        # Preparazione chiavi
-        subprocess.run(f"{openssl_path} genpkey -algorithm {algorithm} -out {project_path}/private_key.pem", shell=True)
-        subprocess.run(
-            f"{openssl_path} pkey -in {project_path}/private_key.pem -pubout -out {project_path}/public_key.pem",
-            shell=True)
-
-        # Incapsulamento
+        # Encapsulation
         start = time.time()
-        encap_cmd = f"{openssl_path} pkeyutl -encrypt -inkey {project_path}/public_key.pem -keyform PEM"
+        encap_cmd = f"{openssl_path} pkeyutl -encrypt -inkey {tmp}/public_key.pem -keyform PEM"
         subprocess.run(encap_cmd, shell=True, capture_output=True)
         encap_times.append(time.time() - start)
 
-        # Decapsulamento
+        # Decapsulation
         start = time.time()
-        decap_cmd = f"{openssl_path} pkeyutl -decrypt -inkey {project_path}/private_key.pem -keyform PEM"
+        decap_cmd = f"{openssl_path} pkeyutl -decrypt -inkey {tmp}/private_key.pem -keyform PEM"
         subprocess.run(decap_cmd, shell=True, capture_output=True)
         decap_times.append(time.time() - start)
 
-    cleanup_files(["private_key.pem", "public_key.pem"])
+        cleanup_files(["private_key.pem", "public_key.pem"])
 
     return {
         'key_generation_avg': statistics.mean(key_times),
@@ -92,42 +89,33 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
 
 
 def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
-    print(" > Avvio benchmark SIGNATURE...")
+    print(" > Starting SIGNATURE benchmark...")
     key_times = []
     sign_times = []
     verify_times = []
 
-    with open(f'{project_path}/test_message.txt', 'wb') as f:
+    with open(f'{tmp}/test_message.txt', 'wb') as f:
         f.write(os.urandom(1024))
 
-    for i in range(num_iterations):
-        print(f" > Iterazione {i + 1}/{num_iterations} per Signature benchmark") if i % 20 == 0 else None
-
-        # Generazione chiavi
+    for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
+        # Key generation
         start = time.time()
-        keygen_cmd = f"{openssl_path} genpkey -algorithm {algorithm}"
-        subprocess.run(keygen_cmd, shell=True, capture_output=True)
+        generate_key(algorithm)
         key_times.append(time.time() - start)
-
-        # Preparazione chiavi
-        subprocess.run(f"{openssl_path} genpkey -algorithm {algorithm} -out {project_path}/private_key.pem", shell=True)
-        subprocess.run(
-            f"{openssl_path} pkey -in {project_path}/private_key.pem -pubout -out {project_path}/public_key.pem",
-            shell=True)
 
         # Firma
         start = time.time()
-        sign_cmd = f"{openssl_path} dgst -sign {project_path}/private_key.pem -keyform PEM -sha256 -out {project_path}/signature.bin {project_path}/test_message.txt"
+        sign_cmd = f"{openssl_path} dgst -sign {tmp}/private_key.pem -keyform PEM -sha256 -out {tmp}/signature.bin {tmp}/test_message.txt"
         subprocess.run(sign_cmd, shell=True, capture_output=True)
         sign_times.append(time.time() - start)
 
         # Verifica
         start = time.time()
-        verify_cmd = f"{openssl_path} dgst -verify {project_path}/public_key.pem -keyform PEM -sha256 -signature {project_path}/signature.bin {project_path}/test_message.txt"
+        verify_cmd = f"{openssl_path} dgst -verify {tmp}/public_key.pem -keyform PEM -sha256 -signature {tmp}/signature.bin {tmp}/test_message.txt"
         subprocess.run(verify_cmd, shell=True, capture_output=True)
         verify_times.append(time.time() - start)
 
-    cleanup_files(["private_key.pem", "public_key.pem", "test_message.txt", "signature.bin"])
+        cleanup_files(["private_key.pem", "public_key.pem", "test_message.txt", "signature.bin"])
 
     return {
         'key_generation_avg': statistics.mean(key_times),
@@ -139,19 +127,26 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
 def run_benchmark(algorithms, test):
     results = {}
 
+    if os.path.exists(tmp) and (os.listdir(tmp) != []):
+        print(" > Residual files found in 'tmp'. Cleaning up...")
+        for file in os.listdir(tmp):
+            os.remove(f"{tmp}/{file}")
+
+        print("   Environment reset.\n")
+
     for algo in algorithms:
         print(f"Algoritmo: {algo.upper()}")
-
-        if not generate_key(algo):
-            print("Errore nella generazione della chiave.")
-            continue
 
         algo_result = kem_benchmark(algo) if test == 'kem' else sig_benchmark(algo)
 
         if algo_result:
             results[algo] = algo_result
 
-        print(f" > Benchmark completato.")
+        cleanup_files(["private_key.pem", "public_key.pem"])
+        if test == 'signature':
+            cleanup_files(["test_message.txt", "signature.bin"])
+
+        print(f"  Benchmark completato.")
         print("\n")
     return results
 
