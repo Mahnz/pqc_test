@@ -1,56 +1,56 @@
 {
     "KEM": {
         "kyber512": {
-            "key_generation_avg": 0.030547707080841063,
-            "encapsulation_avg": 0.01370645523071289,
-            "decapsulation_avg": 0.013628900051116943
+            "key_generation_avg": 0.046715097427368166,
+            "encapsulation_avg": 0.014525039196014404,
+            "decapsulation_avg": 0.01431955099105835
         },
         "kyber768": {
-            "key_generation_avg": 0.02264451503753662,
-            "encapsulation_avg": 0.010142033100128173,
-            "decapsulation_avg": 0.010262510776519775
+            "key_generation_avg": 0.031153008937835694,
+            "encapsulation_avg": 0.009889562129974366,
+            "decapsulation_avg": 0.009676773548126221
         },
         "kyber1024": {
-            "key_generation_avg": 0.028558442592620848,
-            "encapsulation_avg": 0.012955224514007569,
-            "decapsulation_avg": 0.0134460186958313
+            "key_generation_avg": 0.0219365930557251,
+            "encapsulation_avg": 0.007046482563018799,
+            "decapsulation_avg": 0.006908552646636963
         }
     },
     "SIGNATURE": {
         "dilithium2": {
-            "key_generation_avg": 0.024706737995147707,
-            "signing_avg": 0.013540151119232178,
-            "verification_avg": 0.012124190330505371
+            "key_generation_avg": 0.02585047245025635,
+            "signing_avg": 0.008321411609649658,
+            "verification_avg": 0.00819732904434204
         },
         "dilithium3": {
-            "key_generation_avg": 0.024475231170654296,
-            "signing_avg": 0.013588171005249023,
-            "verification_avg": 0.0119606351852417
+            "key_generation_avg": 0.03394173860549927,
+            "signing_avg": 0.010744290351867676,
+            "verification_avg": 0.010480000972747802
         },
         "dilithium5": {
-            "key_generation_avg": 0.02101222276687622,
-            "signing_avg": 0.01179309606552124,
-            "verification_avg": 0.01034688949584961
+            "key_generation_avg": 0.022241246700286866,
+            "signing_avg": 0.007130711078643799,
+            "verification_avg": 0.006850743293762207
         },
         "sphincssha2128fsimple": {
-            "key_generation_avg": 0.023637568950653075,
-            "signing_avg": 0.02210434675216675,
-            "verification_avg": 0.01324281930923462
+            "key_generation_avg": 0.020317065715789794,
+            "signing_avg": 0.006511566638946534,
+            "verification_avg": 0.00624819278717041
         },
         "sphincsshake128fsimple": {
-            "key_generation_avg": 0.024618635177612303,
-            "signing_avg": 0.03339120626449585,
-            "verification_avg": 0.013295416831970214
+            "key_generation_avg": 0.020889434814453125,
+            "signing_avg": 0.006579685211181641,
+            "verification_avg": 0.00635028600692749
         },
         "falcon512": {
-            "key_generation_avg": 0.028651480674743653,
-            "signing_avg": 0.011922616958618164,
-            "verification_avg": 0.010429389476776123
+            "key_generation_avg": 0.02651484489440918,
+            "signing_avg": 0.006407549381256103,
+            "verification_avg": 0.006234304904937744
         },
         "falcon1024": {
-            "key_generation_avg": 0.04072965145111084,
-            "signing_avg": 0.012069287300109864,
-            "verification_avg": 0.010416145324707032
+            "key_generation_avg": 0.04073376655578613,
+            "signing_avg": 0.006714668273925781,
+            "verification_avg": 0.006546452045440674
         }
     }
 }

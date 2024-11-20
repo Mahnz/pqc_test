@@ -11,6 +11,7 @@ tmp = "./tmp"
 
 debug = {
     "keygen": False,
+    "commands": False,
 }
 
 
@@ -24,7 +25,7 @@ def generate_key(algorithm: str):
     try:
         print(" > Generating the keys...") if debug["keygen"] else None
 
-        subprocess.run([
+        result = subprocess.run([
             openssl_path, 'genpkey',
             '-provider', 'default',
             '-provider', 'oqsprovider',
@@ -33,9 +34,10 @@ def generate_key(algorithm: str):
             '-algorithm', algorithm
         ], capture_output=True, text=True, check=True)
 
+        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
         print("   Private key generated.") if debug["keygen"] else None
 
-        subprocess.run([
+        result = subprocess.run([
             openssl_path, 'pkey',
             '-in', f'{tmp}/private_key.pem',
             '-pubout',
@@ -45,6 +47,7 @@ def generate_key(algorithm: str):
             '-provider-path', provider_path
         ], check=True)
 
+        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
         print("   Public key generated.") if debug["keygen"] else None
         return True
     except subprocess.CalledProcessError as e:
@@ -69,15 +72,19 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
 
         # Encapsulation
         start = time.time()
-        encap_cmd = f"{openssl_path} pkeyutl -encrypt -inkey {tmp}/public_key.pem -keyform PEM"
-        subprocess.run(encap_cmd, shell=True, capture_output=True)
+        result = subprocess.run([
+            openssl_path, "pkeyutl", "-encrypt", "-inkey", f"{tmp}/public_key.pem", "-keyform", "PEM"],
+            shell=True, capture_output=True)
         encap_times.append(time.time() - start)
+        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
 
         # Decapsulation
         start = time.time()
-        decap_cmd = f"{openssl_path} pkeyutl -decrypt -inkey {tmp}/private_key.pem -keyform PEM"
-        subprocess.run(decap_cmd, shell=True, capture_output=True)
+        result = subprocess.run([
+            openssl_path, "pkeyutl", "-decrypt", "-inkey", f"{tmp}/private_key.pem", "-keyform", "PEM"],
+            shell=True, capture_output=True)
         decap_times.append(time.time() - start)
+        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
 
         cleanup_files(["private_key.pem", "public_key.pem"])
 
@@ -105,15 +112,21 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
 
         # Firma
         start = time.time()
-        sign_cmd = f"{openssl_path} dgst -sign {tmp}/private_key.pem -keyform PEM -sha256 -out {tmp}/signature.bin {tmp}/test_message.txt"
-        subprocess.run(sign_cmd, shell=True, capture_output=True)
+        result = subprocess.run([
+            openssl_path, "dgst", "-sign", f"{tmp}/private_key.pem", "-keyform", "PEM", "-sha256", "-out",
+            f"{tmp}/signature.bin", f"{tmp}/test_message.txt"],
+            shell=True, capture_output=True)
         sign_times.append(time.time() - start)
+        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
 
         # Verifica
         start = time.time()
-        verify_cmd = f"{openssl_path} dgst -verify {tmp}/public_key.pem -keyform PEM -sha256 -signature {tmp}/signature.bin {tmp}/test_message.txt"
-        subprocess.run(verify_cmd, shell=True, capture_output=True)
+        result = subprocess.run(
+            [openssl_path, "dgst", "-verify", f"{tmp}/public_key.pem", "-keyform", "PEM",
+             "-sha256", "-signature", f"{tmp}/signature.bin", f"{tmp}/test_message.txt"],
+            shell=True, capture_output=True)
         verify_times.append(time.time() - start)
+        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
 
         cleanup_files(["private_key.pem", "public_key.pem", "test_message.txt", "signature.bin"])
 
