@@ -11,7 +11,7 @@ kem_algorithms = ["kyber512", "kyber768", "kyber1024"]
 
 sig_algorithms = [
     "dilithium2", "dilithium3", "dilithium5",
-    "sphincssha2128fsimple", "sphincsshake128fsimple",
+    "sphincssha2128fsimple", "sphincssha2128ssimple",
     "falcon512", "falcon1024",
 ]
 
@@ -23,10 +23,8 @@ if execute["benchmark"]:
     save_results(results)
 
 # %% Visualization of the results
-
-
 if execute["visualization"]:
-    with open("benchmark_results.json", "r") as f:
+    with open("./results/benchmark_results.json", "r") as f:
         results = json.load(f)
 
     # KEM Benchmark
@@ -35,8 +33,13 @@ if execute["visualization"]:
         algorithms=kem_algorithms,
         colors=['#166537', '#2774a7', '#94251a'],
         title="Benchmark KEM Algorithms",
-        figsize=(15, 10),
-        test_type="kem"
+        size_key=(5, 4),  # (x, y) = (width, height)
+        size_ops=(5, 8),
+        suptitle_font=10,
+        title_font=10,
+        label_font=9,
+        test_type="kem",
+        save_path="./results/kem_"
     )
 
     # Signature Benchmark
@@ -45,6 +48,11 @@ if execute["visualization"]:
         algorithms=sig_algorithms,
         colors=['#166537', '#2774a7', '#94251a', '#8B4513', '#4B0082', '#FF8C00', '#008080'],
         title="Benchmark Signature Algorithms",
-        figsize=(17, 17),
-        test_type="signature"
+        size_key=(11, 6),  # (x, y) = (width, height)
+        size_ops=(11, 11),
+        suptitle_font=16,
+        title_font=12,
+        label_font=12,
+        test_type="signature",
+        save_path="./results/signature_"
     )

@@ -1,0 +1,56 @@
+{
+    "KEM": {
+        "kyber512": {
+            "key_generation_avg": 0.03102250337600708,
+            "encapsulation_avg": 0.009994521141052246,
+            "decapsulation_avg": 0.009784085750579834
+        },
+        "kyber768": {
+            "key_generation_avg": 0.026046123504638672,
+            "encapsulation_avg": 0.00829235315322876,
+            "decapsulation_avg": 0.008146865367889404
+        },
+        "kyber1024": {
+            "key_generation_avg": 0.019671931266784667,
+            "encapsulation_avg": 0.006355235576629639,
+            "decapsulation_avg": 0.0060939168930053715
+        }
+    },
+    "SIGNATURE": {
+        "dilithium2": {
+            "key_generation_avg": 0.021800827980041505,
+            "signing_avg": 0.007025089263916016,
+            "verification_avg": 0.006837441921234131
+        },
+        "dilithium3": {
+            "key_generation_avg": 0.02429631233215332,
+            "signing_avg": 0.007708439826965332,
+            "verification_avg": 0.0076273465156555175
+        },
+        "dilithium5": {
+            "key_generation_avg": 0.02465776205062866,
+            "signing_avg": 0.007783768177032471,
+            "verification_avg": 0.007661776542663574
+        },
+        "sphincssha2128fsimple": {
+            "key_generation_avg": 0.025391669273376466,
+            "signing_avg": 0.00810323715209961,
+            "verification_avg": 0.007872345447540284
+        },
+        "sphincssha2128ssimple": {
+            "key_generation_avg": 0.034393105506896976,
+            "signing_avg": 0.005582313537597656,
+            "verification_avg": 0.005229279994964599
+        },
+        "falcon512": {
+            "key_generation_avg": 0.020719759464263916,
+            "signing_avg": 0.005181686878204346,
+            "verification_avg": 0.004995982646942138
+        },
+        "falcon1024": {
+            "key_generation_avg": 0.03054312467575073,
+            "signing_avg": 0.00515064001083374,
+            "verification_avg": 0.004998762607574463
+        }
+    }
+}

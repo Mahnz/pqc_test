@@ -3,25 +3,36 @@ import json
 import os
 import statistics
 import time
+
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import logging
+
+debug = {
+    "cleanup": False,
+    "first": True
+}
+
+logging.basicConfig(
+    filename='benchmark.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
 
 openssl_path = "/opt/openssl-3.3.2/bin/openssl"
 provider_path = "/opt/openssl-3.3.2/lib64/ossl-modules"
 tmp = "./tmp"
 
-debug = {
-    "keygen": False,
-    "commands": False,
-}
-
 
 def cleanup_files(files: list | str):
     if files == "*":
         if os.path.exists(tmp) and (os.listdir(tmp) != []):
-            print(" > Residual files found in 'tmp'. Cleaning up...")
+            logging.warning("Cleaning up residual files in 'tmp' folder.")
             for file in os.listdir(tmp):
                 os.remove(f"{tmp}/{file}")
+            logging.warning("All residual files deleted.\n")
+
 
     elif type(files) == list:
         for file in files:
@@ -29,11 +40,12 @@ def cleanup_files(files: list | str):
                 os.remove(f"{tmp}/{file}")
     else:
         print("Error: cleanup_files() called with unsupported argument.")
+        logging.error("Error: cleanup_files() called with unsupported argument.")
 
 
 def generate_key(algorithm: str) -> bool:
     try:
-        print(" > Generating the keys...") if debug["keygen"] else None
+        logging.info(f"Key generation for algorithm {algorithm.upper()} started.") if debug["first"] else None
 
         result = subprocess.run([
             openssl_path, 'genpkey',
@@ -44,8 +56,8 @@ def generate_key(algorithm: str) -> bool:
             '-algorithm', algorithm
         ], capture_output=True, text=True, check=True)
 
-        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
-        print("   Private key generated.") if debug["keygen"] else None
+        logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
+        logging.debug(f"  > Private Key {algorithm.upper()} generated successfully.") if debug["first"] else None
 
         result = subprocess.run([
             openssl_path, 'pkey',
@@ -57,19 +69,20 @@ def generate_key(algorithm: str) -> bool:
             '-provider-path', provider_path
         ], check=True)
 
-        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
-        print("   Public key generated.") if debug["keygen"] else None
+        logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
+        logging.debug(f"  > Public Key {algorithm.upper()} generated successfully.\n") if debug["first"] else None
+
+        if debug["first"]: debug["first"] = False
         return True
     except subprocess.CalledProcessError as e:
         print(f"Error in key generation for {algorithm.upper()}: ")
-        print(f"Command: {' '.join(e.cmd)}")
-        print(f"Stdout: {e.stdout}")
-        print(f"Stderr: {e.stderr}")
+        logging.error(f"Error in key generation for {algorithm.upper()}: \n{e.stderr}")
         return False
 
 
 def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
     print(" > Starting KEM benchmark...")
+    logging.info(f"Starting KEM benchmark for {algorithm.upper()}.")
     key_times = []
     encap_times = []
     decap_times = []
@@ -86,7 +99,7 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
             openssl_path, "pkeyutl", "-encrypt", "-inkey", f"{tmp}/public_key.pem", "-keyform", "PEM"],
             shell=True, capture_output=True)
         encap_times.append(time.time() - start)
-        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
+        logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
 
         # Decapsulation
         start = time.time()
@@ -94,19 +107,19 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
             openssl_path, "pkeyutl", "-decrypt", "-inkey", f"{tmp}/private_key.pem", "-keyform", "PEM"],
             shell=True, capture_output=True)
         decap_times.append(time.time() - start)
-        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
+        logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
 
-        cleanup_files(["private_key.pem", "public_key.pem"])
-
+        if debug["first"]: debug["first"] = False
     return {
         'key_generation_avg': statistics.mean(key_times),
         'encapsulation_avg': statistics.mean(encap_times),
-        'decapsulation_avg': statistics.mean(decap_times)
+        'decapsulation_avg': statistics.mean(decap_times),
     }
 
 
 def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
     print(" > Starting SIGNATURE benchmark...")
+    logging.info(f"Starting SIGNATURE benchmark for {algorithm.upper()}.")
     key_times = []
     sign_times = []
     verify_times = []
@@ -127,7 +140,7 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
             f"{tmp}/signature.bin", f"{tmp}/test_message.txt"],
             shell=True, capture_output=True)
         sign_times.append(time.time() - start)
-        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
+        logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
 
         # Verifica
         start = time.time()
@@ -136,14 +149,13 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
              "-sha256", "-signature", f"{tmp}/signature.bin", f"{tmp}/test_message.txt"],
             shell=True, capture_output=True)
         verify_times.append(time.time() - start)
-        print(f"\nCOMMAND: {' '.join(result.args)}") if debug["commands"] else None
+        logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
 
-        cleanup_files(["private_key.pem", "public_key.pem", "signature.bin"])
-
+        if debug["first"]: debug["first"] = False
     return {
         'key_generation_avg': statistics.mean(key_times),
         'signing_avg': statistics.mean(sign_times),
-        'verification_avg': statistics.mean(verify_times)
+        'verification_avg': statistics.mean(verify_times),
     }
 
 
@@ -152,64 +164,102 @@ def run_benchmark(algorithms, test):
 
     # Reset the environment
     cleanup_files("*")
-    print("   Environment reset.\n")
 
     # Run the benchmark
     for algo in algorithms:
-        print(f"Algoritmo: {algo.upper()}")
+        print(f"Algorithm - {algo.upper()}")
 
         algo_result = kem_benchmark(algo) if test == 'kem' else sig_benchmark(algo)
 
         if algo_result:
             results[algo] = algo_result
 
-        cleanup_files(["private_key.pem", "public_key.pem"])
-        if test == 'signature':
-            cleanup_files(["test_message.txt", "signature.bin"])
+        if debug["cleanup"]:
+            cleanup_files(["private_key.pem", "public_key.pem"])
+            if test == 'signature':
+                cleanup_files(["test_message.txt", "signature.bin"])
 
-        print(f"  Benchmark completato.")
-        print("\n")
+        print(f"  Benchmark completato.\n")
     return results
 
 
 def save_results(results):
-    with open('benchmark_results.json', 'w') as f:
+    with open('./results/benchmark_results.json', 'w') as f:
         json.dump(results, f, indent=4)
 
-    print("All results saved in 'benchmark_results.json'")
+    print("All results saved in './results/benchmark_results.json'")
 
 
-def plot_benchmark(data, algorithms, colors, title, figsize, test_type):
+def plot_benchmark(data, algorithms, colors, title, suptitle_font, title_font, label_font,
+                   size_key, size_ops, test_type, save_path=None):
+    times = [data[algo]["key_generation_avg"] for algo in algorithms]
+
+    # - - - - - - - - - - - - - - - Benchmark Key Generation - - - - - - - - - - - - - - -
+    fig_key, ax = plt.subplots(figsize=size_key)
+    fig_key.suptitle(t=title, fontsize=suptitle_font, fontweight='bold', y=0.98)
+
+    bars = ax.bar(algorithms, times, color=colors, label=algorithms)
+    ax.set_title("Key Generation Time", fontsize=title_font)
+    ax.set_ylabel("Time (seconds)")
+    ax.legend()
+    ax.set_xticklabels([])
+
+    max_height = max(times)
+    ax.set_ylim(0, max_height * 1.1)
+
+    for rect in bars:
+        height = rect.get_height()
+        ax.text(
+            rect.get_x() + rect.get_width() / 2,
+            height + height * 0.01,
+            f"{height:.6f}s",
+            va="bottom",
+            ha="center",
+            fontsize=label_font
+        )
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path + "keygen_benchmark.png")
+    plt.show()
+
+    # - - - - - - - - - - - - - - - - Benchmark Operations - - - - - - - - - - - - - - - - -
     times = {
-        "key_generation": [data[algo]["key_generation_avg"] for algo in reversed(algorithms)],
         "operation": [data[algo]["encapsulation_avg" if test_type == "kem" else "signing_avg"]
-                      for algo in reversed(algorithms)],
+                      for algo in algorithms],
         "verification": [data[algo]["decapsulation_avg" if test_type == "kem" else "verification_avg"]
-                         for algo in reversed(algorithms)]
+                         for algo in algorithms]
     }
-
-    operations = ["Key Generation Time",
-                  "Encapsulation Time" if test_type == "kem" else "Signing Time",
+    operations = ["Encapsulation Time" if test_type == "kem" else "Signing Time",
                   "Decapsulation Time" if test_type == "kem" else "Verification Time"]
 
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize, sharex=True)
-    fig.suptitle(title, fontsize=18, y=0.995)
+    fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=size_ops, sharex=True)
+    fig1.suptitle(t=title, fontsize=suptitle_font, fontweight='bold', y=0.98)
 
-    for ax, operation, data in zip([ax1, ax2, ax3], operations, times.values()):
-        bars = ax.barh(list(reversed(algorithms)), data, color=list(reversed(colors)))
-        ax.set_title(operation)
-        ax.set_xlabel("Time (seconds)")
+    for axis, operation, data in zip([ax1, ax2], operations, times.values()):
+        bars = axis.bar(algorithms, data, color=colors, label=algorithms)
+        axis.set_title(operation, fontsize=title_font)
+        axis.set_ylabel("Time (seconds)")
+        axis.legend()
+
+        axis.set_xticklabels([])
+
+        max_height = max(data)
+        axis.set_ylim(0, max_height * 1.1)
 
         for rect in bars:
-            width = rect.get_width()
-            ax.text(
-                width + width * 0.02,
-                rect.get_y() + rect.get_height() / 2,
-                f"{width:.6f}s",
-                va="center",
-                ha="left",
-                fontsize=11
+            height = rect.get_height()
+            axis.text(
+                rect.get_x() + rect.get_width() / 2,
+                height + height * 0.01,
+                f"{height:.6f}s",
+                va="bottom",
+                ha="center",
+                fontsize=label_font
             )
 
     plt.tight_layout(h_pad=3)
+    if save_path:
+        plt.savefig(save_path + "ops_benchmark.png")
+
     plt.show()
