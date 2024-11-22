@@ -43,7 +43,7 @@ def cleanup_files(files: list | str):
         logging.error("Error: cleanup_files() called with unsupported argument.")
 
 
-def generate_key(algorithm: str) -> bool:
+def generate_key(algorithm: str) -> dict:
     try:
         logging.info(f"Key generation for algorithm {algorithm.upper()} started.") if debug["first"] else None
 
@@ -72,12 +72,15 @@ def generate_key(algorithm: str) -> bool:
         logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
         logging.debug(f"  > Public Key {algorithm.upper()} generated successfully.\n") if debug["first"] else None
 
+        private_size = os.path.getsize(f'{tmp}/private_key.pem')
+        public_size = os.path.getsize(f'{tmp}/public_key.pem')
         if debug["first"]: debug["first"] = False
-        return True
+
+        return {'private_size': private_size, 'public_size': public_size}
     except subprocess.CalledProcessError as e:
         print(f"Error in key generation for {algorithm.upper()}: ")
         logging.error(f"Error in key generation for {algorithm.upper()}: \n{e.stderr}")
-        return False
+        return {}
 
 
 def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
@@ -86,6 +89,10 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
     key_times = []
     encap_times = []
     decap_times = []
+
+    key_sizes = generate_key(algorithm)
+    if not key_sizes:
+        return {}
 
     for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
         # Key generation
@@ -111,6 +118,8 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
 
         if debug["first"]: debug["first"] = False
     return {
+        'private_size': key_sizes['private_size'],
+        'public_size': key_sizes['public_size'],
         'key_generation_avg': statistics.mean(key_times),
         'encapsulation_avg': statistics.mean(encap_times),
         'decapsulation_avg': statistics.mean(decap_times),
@@ -123,6 +132,10 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
     key_times = []
     sign_times = []
     verify_times = []
+
+    key_sizes = generate_key(algorithm)
+    if not key_sizes:
+        return {}
 
     with open(f'{tmp}/test_message.txt', 'wb') as f:
         f.write(os.urandom(1024))
@@ -153,6 +166,8 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
 
         if debug["first"]: debug["first"] = False
     return {
+        'private_size': key_sizes['private_size'],
+        'public_size': key_sizes['public_size'],
         'key_generation_avg': statistics.mean(key_times),
         'signing_avg': statistics.mean(sign_times),
         'verification_avg': statistics.mean(verify_times),
@@ -262,4 +277,48 @@ def plot_benchmark(data, algorithms, colors, title, suptitle_font, title_font, l
     if save_path:
         plt.savefig(save_path + "ops_benchmark.png")
 
+    plt.show()
+
+
+def plot_key_sizes(data, algorithms, figsize, save_path=None):
+    private_sizes = [data[algo]["private_size"] for algo in algorithms]
+    public_sizes = [data[algo]["public_size"] for algo in algorithms]
+
+    fig, ax = plt.subplots(figsize=figsize)
+    bar_width = 0.4
+    x = range(len(algorithms))
+
+    ax.bar(x, private_sizes, bar_width, label="Private Key", color='#A80900')
+    ax.bar([p + bar_width for p in x], public_sizes, bar_width, label="Public Key", color='green')
+
+    ax.set_ylabel("Key Size (B)")
+    ax.set_title("Comparison of Key Sizes", fontweight='bold')
+    ax.set_xticks([p + bar_width / 2 for p in x])
+    ax.set_xticklabels(algorithms, rotation=45)
+    ax.legend()
+
+    ax.set_ylim(0, max(private_sizes) * 1.1)
+
+    for i in range(len(algorithms)):
+        ax.text(
+            x[i],
+            private_sizes[i] + private_sizes[i] * 0.01,
+            f"{private_sizes[i]}B",
+            va="bottom",
+            ha="center",
+            fontsize=8
+        )
+
+        ax.text(
+            x[i] + bar_width,
+            public_sizes[i] + public_sizes[i] * 0.01,
+            f"{public_sizes[i]}B",
+            va="bottom",
+            ha="center",
+            fontsize=8
+        )
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path + "key_sizes.png")
     plt.show()

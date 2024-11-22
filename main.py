@@ -1,4 +1,4 @@
-from benchmark import run_benchmark, save_results, plot_benchmark
+from benchmark import run_benchmark, save_results, plot_benchmark, plot_key_sizes
 import json
 
 execute = {
@@ -54,5 +54,20 @@ if execute["visualization"]:
         title_font=12,
         label_font=12,
         test_type="signature",
+        save_path="./results/signature_"
+    )
+
+    # Keys sizes
+    plot_key_sizes(
+        data=results["KEM"] if "KEM" in results else results["SIGNATURE"],
+        algorithms=kem_algorithms,
+        figsize=(6, 4),
+        save_path="./results/kem_"
+    )
+
+    plot_key_sizes(
+        data=results["SIGNATURE"],
+        algorithms=sig_algorithms,
+        figsize=(10, 5),
         save_path="./results/signature_"
     )

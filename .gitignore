@@ -3,3 +3,5 @@
 .idea
 tmp
 benchmark.log
+results/*
+!results/benchmark_results.json
