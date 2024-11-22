@@ -35,8 +35,10 @@ def cleanup_files(files: list | str):
             for file in os.listdir(tmp):
                 os.remove(f"{tmp}/{file}")
 
+        if os.path.exists(f"benchmark.log"):
             os.remove(f"benchmark.log")
-            logging.warning("All residual files deleted.\n")
+
+        logging.warning("All residual files deleted.\n")
 
     elif isinstance(files, list):
         for file in files:
@@ -88,8 +90,8 @@ def generate_key(algorithm: str) -> dict:
 
 
 def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
-    print(f" > Starting KEM benchmark for {algorithm.upper()}")
-    logging.info(f"Starting KEM benchmark for {algorithm.upper()}.")
+    print(" > Starting KEM benchmark...")
+    logging.info("Starting KEM benchmark...")
 
     keygen_times = []
     encap_times = []
@@ -173,7 +175,7 @@ def kem_rsa_benchmark(algorithm: str, key_size: int, num_iterations: int = 100) 
 
         # Decapsulation
         start = time.time()
-        decrypted_message = private_key.decrypt(
+        private_key.decrypt(
             ciphertext,
             OAEP(mgf=MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
         )
@@ -190,55 +192,7 @@ def kem_rsa_benchmark(algorithm: str, key_size: int, num_iterations: int = 100) 
     }
 
 
-def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
-    print(" > Starting SIGNATURE benchmark...")
-    logging.info(f"Starting SIGNATURE benchmark for {algorithm.upper()}.")
-    key_times = []
-    sign_times = []
-    verify_times = []
-
-    key_sizes = generate_key(algorithm)
-    if not key_sizes:
-        return {}
-
-    with open(f'{tmp}/test_message.txt', 'wb') as f:
-        f.write(os.urandom(1024))
-
-    for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
-        # Key generation
-        start = time.time()
-        generate_key(algorithm)
-        key_times.append(time.time() - start)
-
-        # Firma
-        start = time.time()
-        result = subprocess.run([
-            openssl_path, "dgst", "-sign", f"{tmp}/private_key.pem", "-keyform", "PEM", "-sha256", "-out",
-            f"{tmp}/signature.bin", f"{tmp}/test_message.txt"],
-            shell=True, capture_output=True)
-        sign_times.append(time.time() - start)
-        logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
-
-        # Verifica
-        start = time.time()
-        result = subprocess.run(
-            [openssl_path, "dgst", "-verify", f"{tmp}/public_key.pem", "-keyform", "PEM",
-             "-sha256", "-signature", f"{tmp}/signature.bin", f"{tmp}/test_message.txt"],
-            shell=True, capture_output=True)
-        verify_times.append(time.time() - start)
-        logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
-
-        if debug["first"]: debug["first"] = False
-    return {
-        'private_size': key_sizes['private_size'],
-        'public_size': key_sizes['public_size'],
-        'key_generation_avg': round(statistics.mean(key_times), 7),
-        'signing_avg': round(statistics.mean(sign_times), 7),
-        'verification_avg': round(statistics.mean(verify_times), 7),
-    }
-
-
-def sig_classic_benchmark(message, algorithm: str, key_size: int | None, num_iterations: int = 100) -> dict:
+def sig_benchmark(message: bytes | None, algorithm: str, key_size: int | None, num_iterations: int = 100) -> dict:
     print(" > Starting SIGNATURE benchmark...")
     logging.info(f"Starting SIGNATURE benchmark for {algorithm.upper()}.")
 
@@ -246,27 +200,32 @@ def sig_classic_benchmark(message, algorithm: str, key_size: int | None, num_ite
     sign_times = []
     verify_times = []
 
+    key_sizes = {}
+    private_key = None
+
     if "ecdsa" in algorithm:
         private_key = ec.generate_private_key(ec.SECP256R1())
-        public_key = private_key.public_key()
     elif "rsa" in algorithm:
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
-        public_key = private_key.public_key()
     else:
-        print("Error: Unsupported algorithm.")
-        return {}
+        key_sizes = generate_key(algorithm)
 
-    key_sizes = {
-        'private_size': private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ).__sizeof__(),
-        'public_size': public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        ).__sizeof__()
-    }
+    if "rsa" in algorithm or "ecdsa" in algorithm:
+        public_key = private_key.public_key()
+        key_sizes = {
+            'private_size': private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ).__sizeof__(),
+            'public_size': public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ).__sizeof__()
+        }
+
+    if not key_sizes:
+        return {}
 
     for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
         # Key Generation
@@ -277,6 +236,8 @@ def sig_classic_benchmark(message, algorithm: str, key_size: int | None, num_ite
         elif "rsa" in algorithm:
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
             public_key = private_key.public_key()
+        else:
+            generate_key(algorithm)
         keygen_times.append(time.time() - start)
         logging.debug(f"Key generation for {algorithm.upper()} completed.") if debug["first"] else None
 
@@ -292,6 +253,12 @@ def sig_classic_benchmark(message, algorithm: str, key_size: int | None, num_ite
                 padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
                 hashes.SHA256()
             )
+        else:
+            result = subprocess.run([
+                openssl_path, "dgst", "-sign", f"{tmp}/private_key.pem", "-keyform", "PEM", "-sha256", "-out",
+                f"{tmp}/signature.bin", "message.txt"],
+                shell=True, capture_output=True)
+            logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
         sign_times.append(time.time() - start)
         logging.debug(f"Signing for {algorithm.upper()} completed.") if debug["first"] else None
 
@@ -308,6 +275,12 @@ def sig_classic_benchmark(message, algorithm: str, key_size: int | None, num_ite
                 padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
                 hashes.SHA256()
             )
+        else:
+            result = subprocess.run(
+                [openssl_path, "dgst", "-verify", f"{tmp}/public_key.pem", "-keyform", "PEM",
+                 "-sha256", "-signature", f"{tmp}/signature.bin", "message.txt"],
+                shell=True, capture_output=True)
+            logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
         verify_times.append(time.time() - start)
         logging.debug(f"Verification for {algorithm.upper()} completed.") if debug["first"] else None
 
@@ -317,11 +290,11 @@ def sig_classic_benchmark(message, algorithm: str, key_size: int | None, num_ite
         'public_size': key_sizes['public_size'],
         'key_generation_avg': round(statistics.mean(keygen_times), 7),
         'signing_avg': round(statistics.mean(sign_times), 7),
-        'verification_avg': round(statistics.mean(verify_times), 5)
+        'verification_avg': round(statistics.mean(verify_times), 7)
     }
 
 
-def run_benchmark(algorithms, test: str) -> dict:
+def run_benchmark(algorithms, test: str, message: bytes | None) -> dict:
     results = {}
     algo_result = None
 
@@ -330,43 +303,25 @@ def run_benchmark(algorithms, test: str) -> dict:
 
     # Run the benchmark
     for category in ['classical', 'pqc']:
-        if category == 'pqc':
-            for algo in algorithms[category]:
-                print(f"Algorithm - {algo.upper()}")
+        for algo in algorithms[category]:
+            print(f"Algorithm - {algo['name'].upper()}")
 
-                algo_result = kem_benchmark(algo) if test == 'KEM' else sig_benchmark(algo)
-
-                if algo_result:
-                    results[algo] = algo_result
-
-                if debug["cleanup"]:
-                    cleanup_files(["private_key.pem", "public_key.pem"])
-                    if test == 'SIGNATURE':
-                        cleanup_files(["test_message.txt", "signature.bin"])
-
-                print(f"  Benchmark completato.\n")
-        elif category == "classical":
-            for algo in algorithms[category]:
-                print(f"Algorithm - {algo['name'].upper()}")
-
-                if test == 'KEM':
+            if test == 'KEM':
+                if category == "classical":
                     algo_result = kem_rsa_benchmark(algo['name'], algo['key'])
-                elif test == 'SIGNATURE':
-                    algo_result = sig_classic_benchmark(
-                        message=b"Test Message for RSA Signature",
-                        algorithm=algo['name'],
-                        key_size=algo['key']
-                    )
+                else:
+                    algo_result = kem_benchmark(algo['name'])
+            elif test == 'SIGNATURE':
+                algo_result = sig_benchmark(
+                    message=message,
+                    algorithm=algo['name'],
+                    key_size=algo['key'] if category == "classical" else None
+                )
 
-                if algo_result:
-                    results[algo['name']] = algo_result
+            if algo_result:
+                results[algo['name']] = algo_result
 
-                if debug["cleanup"]:
-                    cleanup_files(["private_key.pem", "public_key.pem"])
-                    if test == 'SIGNATURE':
-                        cleanup_files(["test_message.txt", "signature.bin"])
-
-                print(f"  Benchmark completed.\n")
+            print(f"  Benchmark completato.\n")
 
     return results
 
