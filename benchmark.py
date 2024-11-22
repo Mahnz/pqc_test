@@ -3,10 +3,13 @@ import json
 import os
 import statistics
 import time
-
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import logging
+
+from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
+from cryptography.hazmat.primitives.asymmetric.padding import OAEP, MGF1
+from cryptography.hazmat.primitives import hashes, serialization
 
 debug = {
     "cleanup": False,
@@ -31,12 +34,13 @@ def cleanup_files(files: list | str):
             logging.warning("Cleaning up residual files in 'tmp' folder.")
             for file in os.listdir(tmp):
                 os.remove(f"{tmp}/{file}")
+
+            os.remove(f"benchmark.log")
             logging.warning("All residual files deleted.\n")
 
-
-    elif type(files) == list:
+    elif isinstance(files, list):
         for file in files:
-            if os.path.exists(file):
+            if os.path.exists(f"{tmp}/{file}"):
                 os.remove(f"{tmp}/{file}")
     else:
         print("Error: cleanup_files() called with unsupported argument.")
@@ -84,9 +88,10 @@ def generate_key(algorithm: str) -> dict:
 
 
 def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
-    print(" > Starting KEM benchmark...")
+    print(f" > Starting KEM benchmark for {algorithm.upper()}")
     logging.info(f"Starting KEM benchmark for {algorithm.upper()}.")
-    key_times = []
+
+    keygen_times = []
     encap_times = []
     decap_times = []
 
@@ -98,7 +103,7 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
         # Key generation
         start = time.time()
         generate_key(algorithm)
-        key_times.append(time.time() - start)
+        keygen_times.append(time.time() - start)
 
         # Encapsulation
         start = time.time()
@@ -120,9 +125,68 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
     return {
         'private_size': key_sizes['private_size'],
         'public_size': key_sizes['public_size'],
-        'key_generation_avg': statistics.mean(key_times),
-        'encapsulation_avg': statistics.mean(encap_times),
-        'decapsulation_avg': statistics.mean(decap_times),
+        'key_generation_avg': round(statistics.mean(keygen_times), 7),
+        'encapsulation_avg': round(statistics.mean(encap_times), 7),
+        'decapsulation_avg': round(statistics.mean(decap_times), 7),
+    }
+
+
+def kem_rsa_benchmark(algorithm: str, key_size: int, num_iterations: int = 100) -> dict:
+    print(f" > Starting KEM benchmark for {algorithm.upper()}")
+    logging.info(f"Starting KEM benchmark for {algorithm.upper()}.")
+
+    keygen_times = []
+    encap_times = []
+    decap_times = []
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+    public_key = private_key.public_key()
+
+    key_sizes = {
+        'private_size': private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).__sizeof__(),
+        'public_size': public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).__sizeof__()
+    }
+
+    for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
+        # Key Generation
+        start = time.time()
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+        public_key = private_key.public_key()
+        keygen_times.append(time.time() - start)
+        logging.debug(f"Key generation for {algorithm.upper()} completed.") if debug["first"] else None
+
+        # Encapsulation
+        message = b"Test Message for RSA KEM"
+        start = time.time()
+        ciphertext = public_key.encrypt(
+            message, OAEP(mgf=MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+        )
+        encap_times.append(time.time() - start)
+        logging.debug(f"Encapsulation for {algorithm.upper()} completed.") if debug["first"] else None
+
+        # Decapsulation
+        start = time.time()
+        decrypted_message = private_key.decrypt(
+            ciphertext,
+            OAEP(mgf=MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+        )
+        decap_times.append(time.time() - start)
+        logging.debug(f"Decapsulation for {algorithm.upper()} completed.") if debug["first"] else None
+
+        if debug["first"]: debug["first"] = False
+    return {
+        'private_size': key_sizes['private_size'],
+        'public_size': key_sizes['public_size'],
+        'key_generation_avg': round(statistics.mean(keygen_times), 7),
+        'encapsulation_avg': round(statistics.mean(encap_times), 7),
+        'decapsulation_avg': round(statistics.mean(decap_times), 5)
     }
 
 
@@ -168,33 +232,142 @@ def sig_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
     return {
         'private_size': key_sizes['private_size'],
         'public_size': key_sizes['public_size'],
-        'key_generation_avg': statistics.mean(key_times),
-        'signing_avg': statistics.mean(sign_times),
-        'verification_avg': statistics.mean(verify_times),
+        'key_generation_avg': round(statistics.mean(key_times), 7),
+        'signing_avg': round(statistics.mean(sign_times), 7),
+        'verification_avg': round(statistics.mean(verify_times), 7),
     }
 
 
-def run_benchmark(algorithms, test):
+def sig_classic_benchmark(message, algorithm: str, key_size: int | None, num_iterations: int = 100) -> dict:
+    print(" > Starting SIGNATURE benchmark...")
+    logging.info(f"Starting SIGNATURE benchmark for {algorithm.upper()}.")
+
+    keygen_times = []
+    sign_times = []
+    verify_times = []
+
+    if "ecdsa" in algorithm:
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        public_key = private_key.public_key()
+    elif "rsa" in algorithm:
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+        public_key = private_key.public_key()
+    else:
+        print("Error: Unsupported algorithm.")
+        return {}
+
+    key_sizes = {
+        'private_size': private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).__sizeof__(),
+        'public_size': public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).__sizeof__()
+    }
+
+    for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
+        # Key Generation
+        start = time.time()
+        if "ecdsa" in algorithm:
+            private_key = ec.generate_private_key(ec.SECP256R1())
+            public_key = private_key.public_key()
+        elif "rsa" in algorithm:
+            private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+            public_key = private_key.public_key()
+        keygen_times.append(time.time() - start)
+        logging.debug(f"Key generation for {algorithm.upper()} completed.") if debug["first"] else None
+
+        # Signing
+        start = time.time()
+        if "ecdsa" in algorithm:
+            signature = private_key.sign(
+                message, ec.ECDSA(hashes.SHA256())
+            )
+        elif "rsa" in algorithm:
+            signature = private_key.sign(
+                message,
+                padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+                hashes.SHA256()
+            )
+        sign_times.append(time.time() - start)
+        logging.debug(f"Signing for {algorithm.upper()} completed.") if debug["first"] else None
+
+        # Verification
+        start = time.time()
+        if "ecdsa" in algorithm:
+            public_key.verify(
+                signature, message, ec.ECDSA(hashes.SHA256())
+            )
+        elif "rsa" in algorithm:
+            public_key.verify(
+                signature,
+                message,
+                padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+                hashes.SHA256()
+            )
+        verify_times.append(time.time() - start)
+        logging.debug(f"Verification for {algorithm.upper()} completed.") if debug["first"] else None
+
+        if debug["first"]: debug["first"] = False
+    return {
+        'private_size': key_sizes['private_size'],
+        'public_size': key_sizes['public_size'],
+        'key_generation_avg': round(statistics.mean(keygen_times), 7),
+        'signing_avg': round(statistics.mean(sign_times), 7),
+        'verification_avg': round(statistics.mean(verify_times), 5)
+    }
+
+
+def run_benchmark(algorithms, test: str) -> dict:
     results = {}
+    algo_result = None
 
     # Reset the environment
     cleanup_files("*")
 
     # Run the benchmark
-    for algo in algorithms:
-        print(f"Algorithm - {algo.upper()}")
+    for category in ['classical', 'pqc']:
+        if category == 'pqc':
+            for algo in algorithms[category]:
+                print(f"Algorithm - {algo.upper()}")
 
-        algo_result = kem_benchmark(algo) if test == 'kem' else sig_benchmark(algo)
+                algo_result = kem_benchmark(algo) if test == 'KEM' else sig_benchmark(algo)
 
-        if algo_result:
-            results[algo] = algo_result
+                if algo_result:
+                    results[algo] = algo_result
 
-        if debug["cleanup"]:
-            cleanup_files(["private_key.pem", "public_key.pem"])
-            if test == 'signature':
-                cleanup_files(["test_message.txt", "signature.bin"])
+                if debug["cleanup"]:
+                    cleanup_files(["private_key.pem", "public_key.pem"])
+                    if test == 'SIGNATURE':
+                        cleanup_files(["test_message.txt", "signature.bin"])
 
-        print(f"  Benchmark completato.\n")
+                print(f"  Benchmark completato.\n")
+        elif category == "classical":
+            for algo in algorithms[category]:
+                print(f"Algorithm - {algo['name'].upper()}")
+
+                if test == 'KEM':
+                    algo_result = kem_rsa_benchmark(algo['name'], algo['key'])
+                elif test == 'SIGNATURE':
+                    algo_result = sig_classic_benchmark(
+                        message=b"Test Message for RSA Signature",
+                        algorithm=algo['name'],
+                        key_size=algo['key']
+                    )
+
+                if algo_result:
+                    results[algo['name']] = algo_result
+
+                if debug["cleanup"]:
+                    cleanup_files(["private_key.pem", "public_key.pem"])
+                    if test == 'SIGNATURE':
+                        cleanup_files(["test_message.txt", "signature.bin"])
+
+                print(f"  Benchmark completed.\n")
+
     return results
 
 
@@ -240,13 +413,13 @@ def plot_benchmark(data, algorithms, colors, title, suptitle_font, title_font, l
 
     # - - - - - - - - - - - - - - - - Benchmark Operations - - - - - - - - - - - - - - - - -
     times = {
-        "operation": [data[algo]["encapsulation_avg" if test_type == "kem" else "signing_avg"]
+        "operation": [data[algo]["encapsulation_avg" if test_type == "KEM" else "signing_avg"]
                       for algo in algorithms],
-        "verification": [data[algo]["decapsulation_avg" if test_type == "kem" else "verification_avg"]
+        "verification": [data[algo]["decapsulation_avg" if test_type == "KEM" else "verification_avg"]
                          for algo in algorithms]
     }
-    operations = ["Encapsulation Time" if test_type == "kem" else "Signing Time",
-                  "Decapsulation Time" if test_type == "kem" else "Verification Time"]
+    operations = ["Encapsulation Time" if test_type == "KEM" else "Signing Time",
+                  "Decapsulation Time" if test_type == "KEM" else "Verification Time"]
 
     fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=size_ops, sharex=True)
     fig1.suptitle(t=title, fontsize=suptitle_font, fontweight='bold', y=0.98)
@@ -280,7 +453,7 @@ def plot_benchmark(data, algorithms, colors, title, suptitle_font, title_font, l
     plt.show()
 
 
-def plot_key_sizes(data, algorithms, figsize, save_path=None):
+def plot_key_sizes(data, algorithms, figsize, test_type, save_path=None):
     private_sizes = [data[algo]["private_size"] for algo in algorithms]
     public_sizes = [data[algo]["public_size"] for algo in algorithms]
 
@@ -292,7 +465,7 @@ def plot_key_sizes(data, algorithms, figsize, save_path=None):
     ax.bar([p + bar_width for p in x], public_sizes, bar_width, label="Public Key", color='green')
 
     ax.set_ylabel("Key Size (B)")
-    ax.set_title("Comparison of Key Sizes", fontweight='bold')
+    ax.set_title(f"Comparison of Key Sizes - {test_type}", fontweight='bold')
     ax.set_xticks([p + bar_width / 2 for p in x])
     ax.set_xticklabels(algorithms, rotation=45)
     ax.legend()
@@ -320,5 +493,5 @@ def plot_key_sizes(data, algorithms, figsize, save_path=None):
 
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path + "key_sizes.png")
+        plt.savefig(save_path)
     plt.show()

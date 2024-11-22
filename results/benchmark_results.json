@@ -1,76 +1,118 @@
 {
     "KEM": {
+        "rsa2048": {
+            "private_size": 1737,
+            "public_size": 484,
+            "key_generation_avg": 0.0681838,
+            "encapsulation_avg": 0.0001292,
+            "decapsulation_avg": 0.00148
+        },
+        "rsa3072": {
+            "private_size": 2517,
+            "public_size": 658,
+            "key_generation_avg": 0.1208926,
+            "encapsulation_avg": 0.0001146,
+            "decapsulation_avg": 0.00198
+        },
+        "rsa4096": {
+            "private_size": 3305,
+            "public_size": 833,
+            "key_generation_avg": 0.3712455,
+            "encapsulation_avg": 0.0001485,
+            "decapsulation_avg": 0.00416
+        },
         "kyber512": {
             "private_size": 3390,
             "public_size": 1170,
-            "key_generation_avg": 0.045871224403381344,
-            "encapsulation_avg": 0.014303865432739258,
-            "decapsulation_avg": 0.014042418003082275
+            "key_generation_avg": 0.0168552,
+            "encapsulation_avg": 0.0054965,
+            "decapsulation_avg": 0.0053502
         },
         "kyber768": {
             "private_size": 4950,
             "public_size": 1690,
-            "key_generation_avg": 0.020253517627716065,
-            "encapsulation_avg": 0.006467211246490479,
-            "decapsulation_avg": 0.006351644992828369
+            "key_generation_avg": 0.0189018,
+            "encapsulation_avg": 0.0060452,
+            "decapsulation_avg": 0.0058276
         },
         "kyber1024": {
             "private_size": 6510,
             "public_size": 2210,
-            "key_generation_avg": 0.017515625953674317,
-            "encapsulation_avg": 0.005610778331756592,
-            "decapsulation_avg": 0.005399653911590576
+            "key_generation_avg": 0.0165602,
+            "encapsulation_avg": 0.0053956,
+            "decapsulation_avg": 0.0052126
         }
     },
     "SIGNATURE": {
+        "rsa2048": {
+            "private_size": 1737,
+            "public_size": 484,
+            "key_generation_avg": 0.0323091,
+            "signing_avg": 0.0008093,
+            "verification_avg": 5e-05
+        },
+        "rsa3072": {
+            "private_size": 1737,
+            "public_size": 484,
+            "key_generation_avg": 0.0340116,
+            "signing_avg": 0.0008315,
+            "verification_avg": 5e-05
+        },
+        "ecdsa": {
+            "private_size": 274,
+            "public_size": 211,
+            "key_generation_avg": 2.53e-05,
+            "signing_avg": 7.13e-05,
+            "verification_avg": 8e-05
+        },
         "dilithium2": {
             "private_size": 5295,
             "public_size": 1864,
-            "key_generation_avg": 0.022224769592285157,
-            "signing_avg": 0.007125191688537598,
-            "verification_avg": 0.006922440528869629
+            "key_generation_avg": 0.0176028,
+            "signing_avg": 0.005825,
+            "verification_avg": 0.0056476
         },
         "dilithium3": {
             "private_size": 8155,
             "public_size": 2730,
-            "key_generation_avg": 0.025389912128448485,
-            "signing_avg": 0.008085618019104004,
-            "verification_avg": 0.007951281070709228
+            "key_generation_avg": 0.0207244,
+            "signing_avg": 0.0068814,
+            "verification_avg": 0.0069261
         },
         "dilithium5": {
             "private_size": 10194,
             "public_size": 3595,
-            "key_generation_avg": 0.021477303504943847,
-            "signing_avg": 0.006842837333679199,
-            "verification_avg": 0.006628780364990234
+            "key_generation_avg": 0.0171348,
+            "signing_avg": 0.005595,
+            "verification_avg": 0.0053952
         },
         "sphincssha2128fsimple": {
             "private_size": 213,
             "public_size": 117,
-            "key_generation_avg": 0.021693203449249267,
-            "signing_avg": 0.006867449283599853,
-            "verification_avg": 0.006666731834411621
+            "key_generation_avg": 0.0175767,
+            "signing_avg": 0.0055728,
+            "verification_avg": 0.0054285
         },
         "sphincssha2128ssimple": {
             "private_size": 213,
             "public_size": 117,
-            "key_generation_avg": 0.03726466417312622,
-            "signing_avg": 0.0057709884643554685,
-            "verification_avg": 0.005786681175231933
+            "key_generation_avg": 0.0376483,
+            "signing_avg": 0.0060791,
+            "verification_avg": 0.005921
         },
         "falcon512": {
             "private_size": 3036,
             "public_size": 1292,
-            "key_generation_avg": 0.021122126579284667,
-            "signing_avg": 0.005187129974365235,
-            "verification_avg": 0.00507594108581543
+            "key_generation_avg": 0.0238052,
+            "signing_avg": 0.0062272,
+            "verification_avg": 0.00591
         },
         "falcon1024": {
             "private_size": 5636,
             "public_size": 2506,
-            "key_generation_avg": 0.030923452377319336,
-            "signing_avg": 0.00513958215713501,
-            "verification_avg": 0.005166831016540527
+            "key_generation_avg": 0.0320753,
+            "signing_avg": 0.0056642,
+            "verification_avg": 0.0053816
         }
     }
 }

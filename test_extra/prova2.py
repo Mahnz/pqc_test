@@ -34,11 +34,12 @@ for algorithm in algorithms:
             stderr=subprocess.PIPE
         )
         keygen_time = time.time() - start_time
+        print(f"COMMAND: {' '.join(result.args)}")
 
         if result.returncode != 0:
             print(f"Errore durante la generazione delle chiavi per l'algoritmo {algorithm}:")
             print(result.stderr.decode())
-            sys.exit(1)  # Interrompe l'esecuzione dello script
+            sys.exit(1)
         keygen_times.append(keygen_time)
 
         # Estrazione della chiave pubblica
@@ -47,29 +48,29 @@ for algorithm in algorithms:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
+        print(f"COMMAND: {' '.join(result.args)}")
 
         if result.returncode != 0:
             print(f"Errore durante l'estrazione della chiave pubblica per l'algoritmo {algorithm}:")
             print(result.stderr.decode())
             sys.exit(1)
 
-        # Misura dimensione delle chiavi
-        priv_key_size = os.path.getsize('prova2/priv.pem')
-        pub_key_size = os.path.getsize('prova2/pub.pem')
+        priv_key_size = os.path.getsize('./prova2/priv.pem')
+        pub_key_size = os.path.getsize('./prova2/pub.pem')
         priv_key_sizes.append(priv_key_size)
         pub_key_sizes.append(pub_key_size)
 
-        # Scrittura del messaggio
-        with open('message.txt', 'wb') as f:
+        with open('./prova2/message.txt', 'wb') as f:
             f.write(message)
 
         if 'kyber' in algorithm:
             # Cifratura
             start_time = time.time()
-            result = subprocess.run([openssl_path, 'pkeyutl', '-encrypt', '-in', 'message.txt',
+            result = subprocess.run([openssl_path, 'pkeyutl', '-encrypt', '-in', './prova2/message.txt',
                                      '-pubin', '-inkey', './prova2/pub.pem', '-out', './prova2/cipher.bin'],
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             encrypt_time = time.time() - start_time
+            print(f"COMMAND: {' '.join(result.args)}")
 
             if result.returncode != 0:
                 print(f"Errore durante la cifratura per l'algoritmo {algorithm}:")
@@ -84,6 +85,7 @@ for algorithm in algorithms:
                                      '-inkey', './prova2/priv.pem', '-out', 'decrypted.txt'],
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             decrypt_time = time.time() - start_time
+            print(f"COMMAND: {' '.join(result.args)}")
 
             if result.returncode != 0:
                 print(f"Errore durante la decifratura per l'algoritmo {algorithm}:")
@@ -104,10 +106,11 @@ for algorithm in algorithms:
         else:
             # Firma
             start_time = time.time()
-            result = subprocess.run([openssl_path, 'pkeyutl', '-sign', '-in', 'message.txt',
+            result = subprocess.run([openssl_path, 'pkeyutl', '-sign', '-in', './prova2/message.txt',
                                      '-inkey', './prova2/priv.pem', '-out', './prova2/signature.bin'],
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             sign_time = time.time() - start_time
+            print(f"COMMAND: {' '.join(result.args)}")
 
             if result.returncode != 0:
                 print(f"Errore durante la firma per l'algoritmo {algorithm}:")
@@ -117,10 +120,11 @@ for algorithm in algorithms:
 
             # Verifica
             start_time = time.time()
-            result = subprocess.run([openssl_path, 'pkeyutl', '-verify', '-in', 'message.txt',
+            result = subprocess.run([openssl_path, 'pkeyutl', '-verify', '-in', './prova2/message.txt',
                                      '-sigfile', './prova2/signature.bin', '-pubin', '-inkey', './prova2/pub.pem'],
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             verify_time = time.time() - start_time
+            print(f"COMMAND: {' '.join(result.args)}")
 
             if result.returncode != 0:
                 print(f"Errore durante la verifica per l'algoritmo {algorithm}:")
@@ -133,7 +137,8 @@ for algorithm in algorithms:
             sig_cipher_sizes.append(signature_size)
 
         # Pulizia file temporanei
-        for file in ['./prova2/priv.pem', './prova2/pub.pem', 'message.txt', './prova2/signature.bin', './prova2/cipher.bin',
+        for file in ['./prova2/priv.pem', './prova2/pub.pem', './prova2/message.txt', './prova2/signature.bin',
+                     './prova2/cipher.bin',
                      'decrypted.txt']:
             if os.path.exists(file):
                 os.remove(file)
