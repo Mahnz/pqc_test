@@ -2,30 +2,36 @@ import subprocess
 import json
 import os
 import statistics
+import sys
 import time
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import logging
 
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
-from cryptography.hazmat.primitives.asymmetric.padding import OAEP, MGF1
 from cryptography.hazmat.primitives import hashes, serialization
 
 debug = {
-    "cleanup": False,
     "first": True
 }
 
-logging.basicConfig(
-    filename='benchmark.log',
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%H:%M:%S'
-)
+try:
+    logging.basicConfig(
+        filename='benchmark.log',
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S',
+        force=True
+    )
+except Exception as e:
+    print(f"Error initializing logging: {e}")
+    sys.exit(1)
 
 openssl_path = "/opt/openssl-3.3.2/bin/openssl"
 provider_path = "/opt/openssl-3.3.2/lib64/ossl-modules"
 tmp = "./tmp"
+
+ciphertext_path = f"{tmp}/ciphertext.bin"
 
 
 def cleanup_files(files: list | str):
@@ -36,7 +42,11 @@ def cleanup_files(files: list | str):
                 os.remove(f"{tmp}/{file}")
 
         if os.path.exists(f"benchmark.log"):
-            os.remove(f"benchmark.log")
+            open(f"benchmark.log", 'w').close()
+        else:
+            print("Creating benchmark.log file...")
+            with open(f"benchmark.log", 'w') as f:
+                f.write("")
 
         logging.warning("All residual files deleted.\n")
 
@@ -49,21 +59,24 @@ def cleanup_files(files: list | str):
         logging.error("Error: cleanup_files() called with unsupported argument.")
 
 
-def generate_key(algorithm: str) -> dict:
+def generate_key(algorithm: str, key_size: int | None) -> dict:
     try:
+        cleanup_files(["private_key.pem", "public_key.pem"])
+
         logging.info(f"Key generation for algorithm {algorithm.upper()} started.") if debug["first"] else None
 
         if algorithm == "ecdh":
+            # Generate private key
             result = subprocess.run([
                 openssl_path, "genpkey",
                 "-algorithm", "EC",
                 "-pkeyopt", "ec_paramgen_curve:prime256v1",
                 "-out", f"{tmp}/private_key.pem"
             ], capture_output=True, text=True, check=True)
-
             logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
             logging.debug(f"  > Private Key {algorithm.upper()} generated successfully.") if debug["first"] else None
 
+            # Generate public key
             result = subprocess.run([
                 openssl_path, "pkey",
                 "-in", f"{tmp}/private_key.pem",
@@ -74,7 +87,29 @@ def generate_key(algorithm: str) -> dict:
             logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
             logging.debug(f"  > Public Key {algorithm.upper()} generated successfully.\n") if debug["first"] else None
 
-        elif "kyber" in algorithm:
+        elif "rsa" in algorithm:
+            # Generate private key
+            result = subprocess.run([
+                openssl_path, "genpkey",
+                "-algorithm", "RSA",
+                "-pkeyopt", f"rsa_keygen_bits:{key_size}",
+                "-out", f"{tmp}/private_key.pem"
+            ], capture_output=True, text=True, check=True)
+            logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
+            logging.debug(f"  > Private Key {algorithm.upper()} generated successfully.") if debug["first"] else None
+
+            # Generate public key
+            result = subprocess.run([
+                openssl_path, "pkey",
+                "-in", f"{tmp}/private_key.pem",
+                "-pubout",
+                "-out", f"{tmp}/public_key.pem"
+            ], capture_output=True, text=True, check=True)
+            logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
+            logging.debug(f"  > Public Key {algorithm.upper()} generated successfully.\n") if debug["first"] else None
+
+        else:
+            # Generate private key
             result = subprocess.run([
                 openssl_path, 'genpkey',
                 '-out', f'{tmp}/private_key.pem',
@@ -83,10 +118,10 @@ def generate_key(algorithm: str) -> dict:
                 '-provider', 'oqsprovider',
                 '-provider-path', provider_path
             ], capture_output=True, text=True, check=True)
-
             logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
             logging.debug(f"  > Private Key {algorithm.upper()} generated successfully.") if debug["first"] else None
 
+            # Generate public key
             result = subprocess.run([
                 openssl_path, 'pkey',
                 '-in', f'{tmp}/private_key.pem',
@@ -102,46 +137,38 @@ def generate_key(algorithm: str) -> dict:
         private_size = os.path.getsize(f'{tmp}/private_key.pem')
         public_size = os.path.getsize(f'{tmp}/public_key.pem')
 
-        if debug["first"]: debug["first"] = False
-
         return {'private_size': private_size, 'public_size': public_size}
     except subprocess.CalledProcessError as e:
-        print(f"Error in key generation for {algorithm.upper()}: ")
+        print(f"Error in key generation for {algorithm.upper()}: {e.stderr}")
         logging.error(f"Error in key generation for {algorithm.upper()}: \n{e.stderr}")
         return {}
 
 
-def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
+def kem_benchmark(algorithm: str, key_size: int | None, num_iterations: int = 100) -> dict:
     print(" > Starting KEM benchmark...")
-    logging.info("Starting KEM benchmark...")
+    logging.info("\nStarting KEM benchmark...")
 
-    keygen_times = []
-    encap_times = []
-    decap_times = []
+    keygen_times, encap_times, decap_times = [], [], []
 
-    key_sizes = generate_key(algorithm)
+    key_sizes = generate_key(algorithm, key_size)
     if not key_sizes:
         return {}
-
-    ciphertext_path = f"{tmp}/ciphertext.bin"
-    shared_secret_path = f"{tmp}/shared_secret.bin"
 
     for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
         # Key generation
         start = time.time()
-        generate_key(algorithm)
+        generate_key(algorithm, key_size)
         keygen_times.append(time.time() - start)
 
-        # Encapsulation (produces a ciphertext and shared secret)
-        start = time.time()
         if algorithm == "ecdh":
+            # Encapsulation
             start = time.time()
             result = subprocess.run([
                 openssl_path, "pkeyutl",
                 "-derive",
                 "-inkey", f"{tmp}/private_key.pem",
                 "-peerkey", f"{tmp}/public_key.pem",
-                "-out", shared_secret_path
+                "-out", ciphertext_path
             ], shell=True, capture_output=True)
             encap_times.append(time.time() - start)
             logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
@@ -149,7 +176,37 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
             # Decapsulation: in ECDH, this is not needed since the shared secret is directly derived
             decap_times.append(0)
 
+        elif "rsa" in algorithm:
+            # Encapsulation
+            start = time.time()
+            result = subprocess.run([
+                openssl_path, "pkeyutl",
+                "-encrypt",
+                "-inkey", f"{tmp}/public_key.pem",
+                "-keyform", "PEM",
+                "-out", ciphertext_path,
+                "-pkeyopt"
+            ], check=True, shell=True, capture_output=True)
+            encap_times.append(time.time() - start)
+            logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
+
+            # Decapsulation
+            start = time.time()
+            result = subprocess.run([
+                openssl_path, "pkeyutl",
+                "-decrypt",
+                "-inkey", f"{tmp}/private_key.pem",
+                "-keyform", "PEM",
+                "-in", ciphertext_path,
+                "-pkeyopt"
+            ], shell=True, capture_output=True)
+            decap_times.append(time.time() - start)
+            logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
+
+
         elif "kyber" in algorithm:
+            # Encapsulation
+            start = time.time()
             result = subprocess.run([
                 openssl_path, "pkeyutl",
                 "-encrypt",
@@ -184,84 +241,21 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
     }
 
 
-def kem_rsa_benchmark(algorithm: str, key_size: int, num_iterations: int = 100) -> dict:
-    print(f" > Starting KEM benchmark...")
-    logging.info(f"Starting KEM benchmark...")
-
-    keygen_times = []
-    encap_times = []
-    decap_times = []
-
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
-    public_key = private_key.public_key()
-
-    key_sizes = {
-        'private_size': private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ).__sizeof__(),
-        'public_size': public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        ).__sizeof__()
-    }
-
-    for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
-        # Key Generation
-        start = time.time()
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
-        public_key = private_key.public_key()
-        keygen_times.append(time.time() - start)
-        logging.debug(f"Key generation for {algorithm.upper()} completed.") if debug["first"] else None
-
-        # Encapsulation
-        message = b"Test Message for RSA KEM"
-        start = time.time()
-        ciphertext = public_key.encrypt(
-            message, OAEP(mgf=MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
-        )
-        encap_times.append(time.time() - start)
-        logging.debug(f"Encapsulation for {algorithm.upper()} completed.") if debug["first"] else None
-
-        # Decapsulation
-        start = time.time()
-        private_key.decrypt(
-            ciphertext,
-            OAEP(mgf=MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
-        )
-        decap_times.append(time.time() - start)
-        logging.debug(f"Decapsulation for {algorithm.upper()} completed.") if debug["first"] else None
-
-        if debug["first"]: debug["first"] = False
-    return {
-        'private_size': key_sizes['private_size'],
-        'public_size': key_sizes['public_size'],
-        'key_generation_avg': round(statistics.mean(keygen_times), 7),
-        'encapsulation_avg': round(statistics.mean(encap_times), 7),
-        'decapsulation_avg': round(statistics.mean(decap_times), 5)
-    }
-
-
 def sig_benchmark(message: bytes | None, algorithm: str, key_size: int | None, num_iterations: int = 100) -> dict:
     print(" > Starting SIGNATURE benchmark...")
-    logging.info(f"Starting SIGNATURE benchmark...")
+    logging.info(f"\nStarting SIGNATURE benchmark...")
 
-    keygen_times = []
-    sign_times = []
-    verify_times = []
-
-    key_sizes = {}
-    private_key = None
-
-    if "ecdsa" in algorithm:
-        private_key = ec.generate_private_key(ec.SECP256R1())
-    elif "rsa" in algorithm:
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
-    else:
-        key_sizes = generate_key(algorithm)
+    # private_key, private_key, signature = None, None, None
+    keygen_times, sign_times, verify_times = [], [], []
 
     if "rsa" in algorithm or "ecdsa" in algorithm:
+        if algorithm == "ecdsa":
+            private_key = ec.generate_private_key(ec.SECP256R1())
+        elif "rsa" in algorithm:
+            if not key_size:
+                raise ValueError("RSA requires a key size to be specified.")
+            private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+
         public_key = private_key.public_key()
         key_sizes = {
             'private_size': private_key.private_bytes(
@@ -274,6 +268,8 @@ def sig_benchmark(message: bytes | None, algorithm: str, key_size: int | None, n
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             ).__sizeof__()
         }
+    else:  # For PQC algorithms
+        key_sizes = generate_key(algorithm, key_size)
 
     if not key_sizes:
         return {}
@@ -288,7 +284,7 @@ def sig_benchmark(message: bytes | None, algorithm: str, key_size: int | None, n
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
             public_key = private_key.public_key()
         else:
-            generate_key(algorithm)
+            generate_key(algorithm, key_size)
         keygen_times.append(time.time() - start)
         logging.debug(f"Key generation for {algorithm.upper()} completed.") if debug["first"] else None
 
@@ -304,11 +300,15 @@ def sig_benchmark(message: bytes | None, algorithm: str, key_size: int | None, n
                 padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
                 hashes.SHA256()
             )
-        else:
+        else:  # For PQC algorithms
             result = subprocess.run([
-                openssl_path, "dgst", "-sign", f"{tmp}/private_key.pem", "-keyform", "PEM", "-sha256", "-out",
-                f"{tmp}/signature.bin", "message.txt"],
-                shell=True, capture_output=True)
+                openssl_path, "dgst",
+                "-sign", f"{tmp}/private_key.pem",
+                "-keyform", "PEM",
+                "-sha256",
+                "-out", f"{tmp}/signature.bin",
+                "message.txt"
+            ], check=True, shell=True, capture_output=True)
             logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
         sign_times.append(time.time() - start)
         logging.debug(f"Signing for {algorithm.upper()} completed.") if debug["first"] else None
@@ -316,9 +316,7 @@ def sig_benchmark(message: bytes | None, algorithm: str, key_size: int | None, n
         # Verification
         start = time.time()
         if "ecdsa" in algorithm:
-            public_key.verify(
-                signature, message, ec.ECDSA(hashes.SHA256())
-            )
+            public_key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
         elif "rsa" in algorithm:
             public_key.verify(
                 signature,
@@ -358,11 +356,7 @@ def run_benchmark(algorithms, test: str, message: bytes | None) -> dict:
             print(f"Algorithm - {algo['name'].upper()}")
 
             if test == 'KEM':
-                # if category == "classical":
-                #     algo_result = kem_rsa_benchmark(algo['name'], algo['key'])
-                # else:
-                #     algo_result = kem_benchmark(algo['name'])
-                algo_result = kem_benchmark(algo['name'])
+                algo_result = kem_benchmark(algo['name'], algo['key'])
             elif test == 'SIGNATURE':
                 algo_result = sig_benchmark(
                     message=message,
@@ -374,7 +368,7 @@ def run_benchmark(algorithms, test: str, message: bytes | None) -> dict:
                 results[algo['name']] = algo_result
 
             print(f"  Benchmark completato.\n")
-
+            if not debug["first"]: debug["first"] = True
     return results
 
 
