@@ -53,33 +53,55 @@ def generate_key(algorithm: str) -> dict:
     try:
         logging.info(f"Key generation for algorithm {algorithm.upper()} started.") if debug["first"] else None
 
-        result = subprocess.run([
-            openssl_path, 'genpkey',
-            '-provider', 'default',
-            '-provider', 'oqsprovider',
-            '-provider-path', provider_path,
-            '-out', f'{tmp}/private_key.pem',
-            '-algorithm', algorithm
-        ], capture_output=True, text=True, check=True)
+        if algorithm == "ecdh":
+            result = subprocess.run([
+                openssl_path, "genpkey",
+                "-algorithm", "EC",
+                "-pkeyopt", "ec_paramgen_curve:prime256v1",
+                "-out", f"{tmp}/private_key.pem"
+            ], capture_output=True, text=True, check=True)
 
-        logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
-        logging.debug(f"  > Private Key {algorithm.upper()} generated successfully.") if debug["first"] else None
+            logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
+            logging.debug(f"  > Private Key {algorithm.upper()} generated successfully.") if debug["first"] else None
 
-        result = subprocess.run([
-            openssl_path, 'pkey',
-            '-in', f'{tmp}/private_key.pem',
-            '-pubout',
-            '-out', f'{tmp}/public_key.pem',
-            '-provider', 'oqsprovider',
-            '-provider', 'default',
-            '-provider-path', provider_path
-        ], check=True)
+            result = subprocess.run([
+                openssl_path, "pkey",
+                "-in", f"{tmp}/private_key.pem",
+                "-pubout",
+                "-out", f"{tmp}/public_key.pem"
+            ], capture_output=True, text=True, check=True)
 
-        logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
-        logging.debug(f"  > Public Key {algorithm.upper()} generated successfully.\n") if debug["first"] else None
+            logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
+            logging.debug(f"  > Public Key {algorithm.upper()} generated successfully.\n") if debug["first"] else None
+
+        elif "kyber" in algorithm:
+            result = subprocess.run([
+                openssl_path, 'genpkey',
+                '-out', f'{tmp}/private_key.pem',
+                '-algorithm', algorithm,
+                '-provider', 'default',
+                '-provider', 'oqsprovider',
+                '-provider-path', provider_path
+            ], capture_output=True, text=True, check=True)
+
+            logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
+            logging.debug(f"  > Private Key {algorithm.upper()} generated successfully.") if debug["first"] else None
+
+            result = subprocess.run([
+                openssl_path, 'pkey',
+                '-in', f'{tmp}/private_key.pem',
+                '-pubout',
+                '-out', f'{tmp}/public_key.pem',
+                '-provider', 'oqsprovider',
+                '-provider', 'default',
+                '-provider-path', provider_path
+            ], capture_output=True, text=True, check=True)
+            logging.debug(f"  > COMMAND: {' '.join(result.args)}") if debug["first"] else None
+            logging.debug(f"  > Public Key {algorithm.upper()} generated successfully.\n") if debug["first"] else None
 
         private_size = os.path.getsize(f'{tmp}/private_key.pem')
         public_size = os.path.getsize(f'{tmp}/public_key.pem')
+
         if debug["first"]: debug["first"] = False
 
         return {'private_size': private_size, 'public_size': public_size}
@@ -101,27 +123,56 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
     if not key_sizes:
         return {}
 
+    ciphertext_path = f"{tmp}/ciphertext.bin"
+    shared_secret_path = f"{tmp}/shared_secret.bin"
+
     for _ in tqdm(range(num_iterations), desc=f"Benchmark {algorithm}", unit="iter"):
         # Key generation
         start = time.time()
         generate_key(algorithm)
         keygen_times.append(time.time() - start)
 
-        # Encapsulation
+        # Encapsulation (produces a ciphertext and shared secret)
         start = time.time()
-        result = subprocess.run([
-            openssl_path, "pkeyutl", "-encrypt", "-inkey", f"{tmp}/public_key.pem", "-keyform", "PEM"],
-            shell=True, capture_output=True)
-        encap_times.append(time.time() - start)
-        logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
+        if algorithm == "ecdh":
+            start = time.time()
+            result = subprocess.run([
+                openssl_path, "pkeyutl",
+                "-derive",
+                "-inkey", f"{tmp}/private_key.pem",
+                "-peerkey", f"{tmp}/public_key.pem",
+                "-out", shared_secret_path
+            ], shell=True, capture_output=True)
+            encap_times.append(time.time() - start)
+            logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
 
-        # Decapsulation
-        start = time.time()
-        result = subprocess.run([
-            openssl_path, "pkeyutl", "-decrypt", "-inkey", f"{tmp}/private_key.pem", "-keyform", "PEM"],
-            shell=True, capture_output=True)
-        decap_times.append(time.time() - start)
-        logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
+            # Decapsulation: in ECDH, this is not needed since the shared secret is directly derived
+            decap_times.append(0)
+
+        elif "kyber" in algorithm:
+            result = subprocess.run([
+                openssl_path, "pkeyutl",
+                "-encrypt",
+                "-inkey", f"{tmp}/public_key.pem",
+                "-keyform", "PEM",
+                "-out", ciphertext_path,
+                "-pkeyopt", "kem"
+            ], check=True, shell=True, capture_output=True)
+            encap_times.append(time.time() - start)
+            logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
+
+            # Decapsulation
+            start = time.time()
+            result = subprocess.run([
+                openssl_path, "pkeyutl",
+                "-decrypt",
+                "-inkey", f"{tmp}/private_key.pem",
+                "-keyform", "PEM",
+                "-in", ciphertext_path,
+                "-pkeyopt", "kem"
+            ], shell=True, capture_output=True)
+            decap_times.append(time.time() - start)
+            logging.debug(f"COMMAND: {' '.join(result.args)}") if debug["first"] else None
 
         if debug["first"]: debug["first"] = False
     return {
@@ -134,8 +185,8 @@ def kem_benchmark(algorithm: str, num_iterations: int = 100) -> dict:
 
 
 def kem_rsa_benchmark(algorithm: str, key_size: int, num_iterations: int = 100) -> dict:
-    print(f" > Starting KEM benchmark for {algorithm.upper()}")
-    logging.info(f"Starting KEM benchmark for {algorithm.upper()}.")
+    print(f" > Starting KEM benchmark...")
+    logging.info(f"Starting KEM benchmark...")
 
     keygen_times = []
     encap_times = []
@@ -194,7 +245,7 @@ def kem_rsa_benchmark(algorithm: str, key_size: int, num_iterations: int = 100) 
 
 def sig_benchmark(message: bytes | None, algorithm: str, key_size: int | None, num_iterations: int = 100) -> dict:
     print(" > Starting SIGNATURE benchmark...")
-    logging.info(f"Starting SIGNATURE benchmark for {algorithm.upper()}.")
+    logging.info(f"Starting SIGNATURE benchmark...")
 
     keygen_times = []
     sign_times = []
@@ -307,10 +358,11 @@ def run_benchmark(algorithms, test: str, message: bytes | None) -> dict:
             print(f"Algorithm - {algo['name'].upper()}")
 
             if test == 'KEM':
-                if category == "classical":
-                    algo_result = kem_rsa_benchmark(algo['name'], algo['key'])
-                else:
-                    algo_result = kem_benchmark(algo['name'])
+                # if category == "classical":
+                #     algo_result = kem_rsa_benchmark(algo['name'], algo['key'])
+                # else:
+                #     algo_result = kem_benchmark(algo['name'])
+                algo_result = kem_benchmark(algo['name'])
             elif test == 'SIGNATURE':
                 algo_result = sig_benchmark(
                     message=message,

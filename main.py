@@ -3,20 +3,21 @@ import json
 
 execute = {
     "benchmark":
-    # True,
-        False,
+        # True,
+    False,
     "plot":
-    #         False,
-        True,
+#         False,
+            True,
 }
 
 # %% Benchmarking
 ALGORITHMS = {
     "KEM": {
         "classical": [
-            {"name": "rsa2048", "key": 2048},
-            {"name": "rsa3072", "key": 3072},
-            {"name": "rsa4096", "key": 4096},
+            {"name": "ecdh", "key": None},
+            # {"name": "rsa2048", "key": 2048},
+            # {"name": "rsa3072", "key": 3072},
+            # {"name": "rsa4096", "key": 4096},
         ],
         "pqc": [
             {"name": "kyber512"},
@@ -48,7 +49,7 @@ if execute["benchmark"]:
     results["KEM"] = run_benchmark(ALGORITHMS["KEM"], test="KEM", message=None)
 
     message = b"This is a message for the Signature test. Enjoy!"
-    results["SIGNATURE"] = run_benchmark(ALGORITHMS["SIGNATURE"], test="SIGNATURE", message=message)
+    # results["SIGNATURE"] = run_benchmark(ALGORITHMS["SIGNATURE"], test="SIGNATURE", message=message)
 
     save_results(results)
 
@@ -57,8 +58,8 @@ if execute["plot"]:
     with open("./results/benchmark_results.json", "r") as f:
         results = json.load(f)
 
+    # KEM Benchmark
     if results["KEM"] != {}:
-        # KEM Benchmark
         plot_benchmark(
             data=results["KEM"],
             algorithms=[algo["name"] for algo in ALGORITHMS["KEM"]["classical"]]
@@ -84,8 +85,8 @@ if execute["plot"]:
             save_path="./results/kem_"
         )
 
+    # SIGNATURE Benchmark
     if results["SIGNATURE"] != {}:
-        # Signature Benchmark
         plot_benchmark(
             data=results["SIGNATURE"],
             algorithms=[algo["name"] for algo in ALGORITHMS["SIGNATURE"]["classical"]]

@@ -1,118 +1,33 @@
 {
     "KEM": {
-        "rsa2048": {
-            "private_size": 1737,
-            "public_size": 484,
-            "key_generation_avg": 0.0377348,
-            "encapsulation_avg": 6.63e-05,
-            "decapsulation_avg": 0.00078
-        },
-        "rsa3072": {
-            "private_size": 2517,
-            "public_size": 658,
-            "key_generation_avg": 0.1672738,
-            "encapsulation_avg": 0.0001187,
-            "decapsulation_avg": 0.0022
-        },
-        "rsa4096": {
-            "private_size": 3305,
-            "public_size": 833,
-            "key_generation_avg": 0.414686,
-            "encapsulation_avg": 0.000152,
-            "decapsulation_avg": 0.00459
+        "ecdh": {
+            "private_size": 241,
+            "public_size": 178,
+            "key_generation_avg": 0.015441,
+            "encapsulation_avg": 0.0050109,
+            "decapsulation_avg": 0
         },
         "kyber512": {
             "private_size": 3390,
             "public_size": 1170,
-            "key_generation_avg": 0.0185544,
-            "encapsulation_avg": 0.0059033,
-            "decapsulation_avg": 0.0056655
+            "key_generation_avg": 0.0159678,
+            "encapsulation_avg": 0.0050054,
+            "decapsulation_avg": 0.0048732
         },
         "kyber768": {
             "private_size": 4950,
             "public_size": 1690,
-            "key_generation_avg": 0.0179065,
-            "encapsulation_avg": 0.0056975,
-            "decapsulation_avg": 0.0054942
+            "key_generation_avg": 0.0161141,
+            "encapsulation_avg": 0.005003,
+            "decapsulation_avg": 0.0049126
         },
         "kyber1024": {
             "private_size": 6510,
             "public_size": 2210,
-            "key_generation_avg": 0.0165464,
-            "encapsulation_avg": 0.0052258,
-            "decapsulation_avg": 0.0050315
+            "key_generation_avg": 0.01612,
+            "encapsulation_avg": 0.0050093,
+            "decapsulation_avg": 0.0048624
         }
     },
-    "SIGNATURE": {
-        "rsa2048": {
-            "private_size": 1737,
-            "public_size": 484,
-            "key_generation_avg": 0.0333943,
-            "signing_avg": 0.000821,
-            "verification_avg": 4.56e-05
-        },
-        "rsa3072": {
-            "private_size": 1737,
-            "public_size": 484,
-            "key_generation_avg": 0.0362049,
-            "signing_avg": 0.0008136,
-            "verification_avg": 4.4e-05
-        },
-        "ecdsa": {
-            "private_size": 274,
-            "public_size": 211,
-            "key_generation_avg": 2.56e-05,
-            "signing_avg": 7.15e-05,
-            "verification_avg": 8.2e-05
-        },
-        "dilithium2": {
-            "private_size": 5295,
-            "public_size": 1864,
-            "key_generation_avg": 0.0162764,
-            "signing_avg": 0.0051493,
-            "verification_avg": 0.0050078
-        },
-        "dilithium3": {
-            "private_size": 8155,
-            "public_size": 2730,
-            "key_generation_avg": 0.0164614,
-            "signing_avg": 0.0051963,
-            "verification_avg": 0.0050237
-        },
-        "dilithium5": {
-            "private_size": 10194,
-            "public_size": 3595,
-            "key_generation_avg": 0.0164754,
-            "signing_avg": 0.0052164,
-            "verification_avg": 0.0050081
-        },
-        "sphincssha2128fsimple": {
-            "private_size": 213,
-            "public_size": 117,
-            "key_generation_avg": 0.0166409,
-            "signing_avg": 0.0051744,
-            "verification_avg": 0.0050211
-        },
-        "sphincssha2128ssimple": {
-            "private_size": 213,
-            "public_size": 117,
-            "key_generation_avg": 0.0345909,
-            "signing_avg": 0.0052614,
-            "verification_avg": 0.0049871
-        },
-        "falcon512": {
-            "private_size": 3036,
-            "public_size": 1292,
-            "key_generation_avg": 0.0214874,
-            "signing_avg": 0.0051391,
-            "verification_avg": 0.0049096
-        },
-        "falcon1024": {
-            "private_size": 5636,
-            "public_size": 2506,
-            "key_generation_avg": 0.0325161,
-            "signing_avg": 0.0051496,
-            "verification_avg": 0.0049823
-        }
-    }
+    "SIGNATURE": {}
 }
