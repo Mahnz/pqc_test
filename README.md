@@ -1,8 +1,8 @@
 ## Introduction
-This repository was made by Lazzizera Antonio Ignazio and Mazzini Domenico for the *'Cryptography'* exam project A.Y. 2023/2024 in Politecnico di Bari. 
-The codes present enable comparisons of post-quantum algorithms being standardised by NIST. The comparison is made between quantum-resistant algorithms and classical algorithms.
-In particular for KEM, RSA and ECDH are compared with CRYSTALS-Kyber. For digital signatures, RSA, ECDSA is compared with the three finalists of the NIST challenge: CRYSTALS-Dilithium, SPHINCS+ and FALCON. The tests for the first (KEM), concerns the measurement of the average of 100 key creations, encapsulation and decapsulation. For DS, it concerns the measurement of the average of 100 key creations, signing and verification process. Finally, graphs are drawn up that visually show how they all compare.
-Now follows the guide to how install the OpenSSL library and other useful tools for the test:
+This repository was made by Lazzizera Antonio Ignazio and Mazzini Domenico for the *'Cryptography'* exam project A.Y. 2023/2024 in Politecnico di Bari. The code performs comparisons of post-quantum algorithms being standardised by NIST. The comparison is made between quantum-resistant algorithms and classical algorithms. In particular for KEM, RSA and ECDH are compared with CRYSTALS-Kyber. For digital signatures, RSA, ECDSA is compared with the three finalists of the NIST challenge: CRYSTALS-Dilithium, SPHINCS+ and FALCON.
+
+The tests for the first (KEM), concerns the measurement of the average of 100 key generation, encapsulation and decapsulation. Instead, for DS it involves the measurement of the average of 100 key generation, signing and verification process. Finally, a visual representation and comparison is provided, realized from the results obtained (`results/benchmark_results.json`).
+Now, follows the guide to how install the OpenSSL library and other useful tools for the test:
 
 ## 1 - Installation of OpenSSL 
 * **STEP 1**: 
